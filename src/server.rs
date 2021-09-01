@@ -47,12 +47,14 @@ impl Worker for WorkerService {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    log::info!("Starting...");
     env_logger::builder()
         .filter_level(LevelFilter::Info)
         .init();
 
-    let addr = "[::1]:50051".parse()?;
+    log::info!("Starting...");
+
+    // for some reason 127.0.0.1 didn't work here
+    let addr = "0.0.0.0:50051".parse()?;
     let worker = WorkerService::default();
 
     Server::builder()

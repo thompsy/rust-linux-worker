@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let opts: Opts = Opts::parse();
 
-    let mut client = WorkerClient::connect("http://[::1]:50051").await?;
+    let mut client = WorkerClient::connect(format!("http://0.0.0.0:50051")).await?;
 
     match opts.subcmd {
         SubCommand::Submit(s) => {
