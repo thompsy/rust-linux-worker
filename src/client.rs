@@ -37,7 +37,7 @@ struct Submit {
 #[derive(Clap)]
 struct Status {
     /// JobId to fetch the status for
-    job_id: String, //TODO these job_ids should be uuids
+    job_id: String,
 }
 
 /// Fetch the logs for a job
