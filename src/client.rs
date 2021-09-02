@@ -3,7 +3,6 @@ use uuid::Uuid;
 use log::LevelFilter;
 
 use api::worker_client::WorkerClient;
-use api::{Command, Empty, JobId, Log, StatusResponse};
 
 pub mod api {
     tonic::include_proto!("api");
