@@ -69,16 +69,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             log::info!("response {:?}", response)
         }
         SubCommand::Status(s) => {
-            let uuid = parse_uuid_or_abort(s.job_id);
-            log::info!("Getting status for job_id {}", uuid);
+            log::info!("Getting status for job_id {}", &s.job_id);
+
+            let request = tonic::Request::new(api::JobId{ id: s.job_id.to_owned()});
+            let response = client.status(request).await?;
+
+            log::info!("response {:?}", response)
         }
         SubCommand::Logs(s) => {
             let uuid = parse_uuid_or_abort(s.job_id);
             log::info!("Fetching logs for job_id {}", uuid)
         }
         SubCommand::Kill(s) => {
-            let uuid = parse_uuid_or_abort(s.job_id);
-            log::info!("Killing job_id {}", uuid);
+            log::info!("Killing job_id {}", &s.job_id);
+
+            let request = tonic::Request::new(api::JobId{ id: s.job_id.to_owned()});
+            let response = client.stop(request).await?;
+
+            log::info!("response {:?}", response)
         }
     };
 
