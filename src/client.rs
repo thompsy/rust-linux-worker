@@ -1,8 +1,7 @@
-use clap::{AppSettings, Clap};
-use uuid::Uuid;
-use log::LevelFilter;
-
 use api::worker_client::WorkerClient;
+use clap::{AppSettings, Clap};
+use log::LevelFilter;
+use uuid::Uuid;
 
 pub mod api {
     tonic::include_proto!("api");
@@ -55,9 +54,7 @@ struct Kill {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::builder()
-        .filter_level(LevelFilter::Info)
-        .init();
+    env_logger::builder().filter_level(LevelFilter::Info).init();
 
     let opts: Opts = Opts::parse();
 
@@ -66,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match opts.subcmd {
         SubCommand::Submit(s) => {
             log::info!("Submitting command {}", s.command);
-            let request = tonic::Request::new(api::Command{ command: s.command });
+            let request = tonic::Request::new(api::Command { command: s.command });
             let response = client.submit(request).await?;
 
             log::info!("response {:?}", response)
@@ -89,12 +86,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn parse_uuid_or_abort(input :String) -> Uuid {
+fn parse_uuid_or_abort(input: String) -> Uuid {
     match Uuid::parse_str(input.as_str()) {
         Err(e) => {
             log::error!("Error parsing UUID: {}", e);
             std::process::exit(1)
-        },
-        Ok(uuid) => uuid
+        }
+        Ok(uuid) => uuid,
     }
 }

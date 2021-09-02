@@ -1,16 +1,14 @@
+use std::collections::HashMap;
 use std::pin::Pin;
-
-use tonic::{transport::Server, Request, Response, Status};
-use futures::Stream;
+use std::sync::Mutex;
 
 use api::worker_server::{Worker, WorkerServer};
 use api::{JobId, StatusResponse};
-
+use futures::Stream;
 use log::LevelFilter;
-use std::collections::HashMap;
+use tonic::transport::Server;
+use tonic::{Request, Response, Status};
 use uuid::Uuid;
-
-use std::sync::Mutex;
 
 pub mod api {
     tonic::include_proto!("api");
@@ -27,10 +25,10 @@ impl Worker for WorkerService {
         log::info!("Got a request: {:?}", request.get_ref());
 
         let result = self.my_worker.submit(request.get_ref().command.to_string());
-        
+
         match result {
-            Ok(uuid) => Ok(Response::new(api::JobId { id: uuid.to_string(), })),
-            Err(e) => Err(Status::new(tonic::Code::Internal, e))
+            Ok(uuid) => Ok(Response::new(api::JobId { id: uuid.to_string() })),
+            Err(e) => Err(Status::new(tonic::Code::Internal, e)),
         }
     }
 
@@ -43,13 +41,12 @@ impl Worker for WorkerService {
         }
         let result = self.my_worker.kill(parsed.unwrap());
         match result {
-            Ok(_) => Ok(Response::new(
-                api::Empty{})),
-            Err(e) => Result::Err(Status::new(tonic::Code::Internal, e))
+            Ok(_) => Ok(Response::new(api::Empty {})),
+            Err(e) => Result::Err(Status::new(tonic::Code::Internal, e)),
         }
     }
 
-    async fn status(&self, request: tonic::Request<JobId>, ) -> Result<tonic::Response<StatusResponse>, tonic::Status> {
+    async fn status(&self, request: tonic::Request<JobId>) -> Result<tonic::Response<StatusResponse>, tonic::Status> {
         log::info!("status {:?}", request.get_ref());
 
         let parsed = Uuid::parse_str(&request.get_ref().id);
@@ -58,12 +55,8 @@ impl Worker for WorkerService {
         }
         let result = self.my_worker.status(parsed.unwrap());
         match result {
-            Ok(_) => Ok(Response::new(
-                api::StatusResponse{ 
-                    status: 1,
-                    exit_code: 0,
-            })),
-            Err(e) => Result::Err(Status::new(tonic::Code::Internal, e))
+            Ok(_) => Ok(Response::new(api::StatusResponse { status: 1, exit_code: 0 })),
+            Err(e) => Result::Err(Status::new(tonic::Code::Internal, e)),
         }
     }
 
@@ -77,27 +70,18 @@ impl Worker for WorkerService {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::builder()
-        .filter_level(LevelFilter::Info)
-        .init();
+    env_logger::builder().filter_level(LevelFilter::Info).init();
 
     log::info!("Starting...");
 
     // for some reason 127.0.0.1 didn't work here
     let addr = "0.0.0.0:50051".parse()?;
-    let worker = WorkerService {
-        my_worker: MyWorker::new(),
-    };
+    let worker = WorkerService { my_worker: MyWorker::new() };
 
-    Server::builder()
-        .add_service(WorkerServer::new(worker))
-        .serve(addr)
-        .await?;
+    Server::builder().add_service(WorkerServer::new(worker)).serve(addr).await?;
 
     Ok(())
 }
-
-
 
 //TODO: rename this to something better. Or maybe rename the other Worker.
 #[derive(Debug)]
@@ -107,9 +91,8 @@ struct MyWorker {
 }
 
 impl MyWorker {
-
     fn new() -> MyWorker {
-        MyWorker{
+        MyWorker {
             jobs: Mutex::new(HashMap::new()),
         }
     }
@@ -130,7 +113,7 @@ impl MyWorker {
         let command = guard.get(&uuid);
         match command {
             Some(s) => Ok(s.to_string()),
-            None => Err("Job not found")
+            None => Err("Job not found"),
         }
     }
 
@@ -140,7 +123,7 @@ impl MyWorker {
         let command = guard.get(&uuid);
         match command {
             Some(_) => Ok(()),
-            None => Err("Job not found")
+            None => Err("Job not found"),
         }
     }
 }

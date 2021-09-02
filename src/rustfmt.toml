@@ -1,0 +1,5 @@
+reorder_imports = true
+group_imports = "StdExternalCrate"
+imports_granularity = "Module"
+fn_args_layout = "Compressed"
+max_width = 150
