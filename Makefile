@@ -8,3 +8,7 @@ docker-run:
 		--privileged \
 		-p 50051:50051 \
 		rust-linux-worker:latest
+
+.PHONY: fmt
+fmt:
+	cargo +nightly fmt
