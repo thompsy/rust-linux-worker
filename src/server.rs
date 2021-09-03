@@ -3,7 +3,7 @@ use std::pin::Pin;
 use std::sync::Mutex;
 
 use api::worker_server::{Worker, WorkerServer};
-use api::{JobId, StatusResponse};
+use api::{JobId, StatusResponse, StatusType};
 use futures::Stream;
 use log::LevelFilter;
 use tonic::transport::Server;
@@ -55,7 +55,7 @@ impl Worker for WorkerService {
         }
         let result = self.my_worker.status(parsed.unwrap());
         match result {
-            Ok(_) => Ok(Response::new(api::StatusResponse { status: 1, exit_code: 0 })),
+            Ok(s) => Ok(Response::new(s)),
             Err(e) => Result::Err(Status::new(tonic::Code::Internal, e)),
         }
     }
@@ -83,11 +83,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[derive(Debug)]
+struct Job {
+    id: Uuid,
+    status: StatusResponse,
+    /// command is the command that was requested. It's a String because the Job owns the content.
+    command: String,
+}
+
 //TODO: rename this to something better. Or maybe rename the other Worker.
 #[derive(Debug)]
 struct MyWorker {
-    //TODO: this should be a sensible struct rather than a string in due course
-    jobs: Mutex<HashMap<Uuid, String>>,
+    jobs: Mutex<HashMap<Uuid, Job>>,
 }
 
 impl MyWorker {
@@ -101,28 +108,43 @@ impl MyWorker {
         let id = Uuid::new_v4();
         let mut guard = self.jobs.lock().unwrap();
 
-        guard.insert(id, command.clone());
-        log::info!("Created Uuid {} for command {}", id, command);
+        let job = Job {
+            id,
+            status: StatusResponse {
+                status: StatusType::Running as i32,
+                exit_code: 0,
+            },
+            command,
+        };
+        log::info!("Created job {:?}", &job);
+
+        guard.insert(id, job);
 
         Ok(id)
     }
 
-    fn status(&self, uuid: Uuid) -> Result<String, &str> {
+    fn status(&self, uuid: Uuid) -> Result<StatusResponse, &str> {
         let guard = self.jobs.lock().unwrap();
 
         let command = guard.get(&uuid);
         match command {
-            Some(s) => Ok(s.to_string()),
+            Some(job) => Ok(job.status.clone()),
             None => Err("Job not found"),
         }
     }
 
     fn kill(&self, uuid: Uuid) -> Result<(), &str> {
-        let guard = self.jobs.lock().unwrap();
+        let mut guard = self.jobs.lock().unwrap();
 
-        let command = guard.get(&uuid);
+        let command = guard.get_mut(&uuid);
         match command {
-            Some(_) => Ok(()),
+            Some(mut job) => {
+                job.status = api::StatusResponse {
+                    status: StatusType::Stopped as i32,
+                    exit_code: 0,
+                };
+                Ok(())
+            }
             None => Err("Job not found"),
         }
     }

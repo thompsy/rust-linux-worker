@@ -19,12 +19,13 @@ message JobId {
 
 message Empty {}
 
+enum StatusType {
+  RUNNING = 0;
+  COMPLETED = 1;
+  STOPPED = 2;
+}
+
 message StatusResponse {
-  enum StatusType {
-    RUNNING = 0;
-    COMPLETED = 1;
-    STOPPED = 2;
-  }
   StatusType status = 1;
   int32 exitCode = 2;
 }
