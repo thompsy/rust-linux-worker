@@ -3,6 +3,7 @@ use clap::{AppSettings, Clap};
 use log::LevelFilter;
 use uuid::Uuid;
 
+/// api is the namespace for the generated GRPC code.
 pub mod api {
     tonic::include_proto!("api");
 }
@@ -34,7 +35,7 @@ struct Submit {
 /// Query the status of a job
 #[derive(Clap)]
 struct Status {
-    /// JobId to fetch the status for
+    /// The job_id to fetch the status for
     job_id: String,
 }
 
@@ -90,10 +91,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // more program logic goes here...
     Ok(())
 }
 
+/// Parse the given UUID or abort the process if parsing fails.
 fn parse_uuid_or_abort(input: String) -> Uuid {
     match Uuid::parse_str(input.as_str()) {
         Err(e) => {

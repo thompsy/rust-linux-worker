@@ -10,21 +10,25 @@ use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
+/// api is the namespace for the GRPC generated code.
 pub mod api {
     tonic::include_proto!("api");
 }
 
+/// WorkerService handles the GRPC requests.
 #[derive(Debug)]
 pub struct WorkerService {
-    my_worker: MyWorker,
+    /// JobManager manages the actual jobs submitted by the client.
+    job_manager: JobManager,
 }
 
 #[tonic::async_trait]
 impl Worker for WorkerService {
+    /// Submit a request to run the given command and return the UUID of the resulting job
     async fn submit(&self, request: Request<api::Command>) -> Result<Response<JobId>, Status> {
         log::info!("Got a request: {:?}", request.get_ref());
 
-        let result = self.my_worker.submit(request.get_ref().command.to_string());
+        let result = self.job_manager.submit(request.get_ref().command.to_string());
 
         match result {
             Ok(uuid) => Ok(Response::new(api::JobId { id: uuid.to_string() })),
@@ -32,20 +36,23 @@ impl Worker for WorkerService {
         }
     }
 
+    /// Stop the job identified by the given UUID
     async fn stop(&self, request: tonic::Request<JobId>) -> Result<tonic::Response<api::Empty>, tonic::Status> {
         log::info!("stopping {:?}", request.get_ref());
 
         let parsed = Uuid::parse_str(&request.get_ref().id);
         if parsed.is_err() {
+            //TODO: we should probably have error definitions shared between client and server
             return Err(Status::invalid_argument("invalid UUID"));
         }
-        let result = self.my_worker.kill(parsed.unwrap());
+        let result = self.job_manager.kill(parsed.unwrap());
         match result {
             Ok(_) => Ok(Response::new(api::Empty {})),
             Err(e) => Result::Err(Status::new(tonic::Code::Internal, e)),
         }
     }
 
+    /// Query the status of the job identified by the given UUID
     async fn status(&self, request: tonic::Request<JobId>) -> Result<tonic::Response<StatusResponse>, tonic::Status> {
         log::info!("status {:?}", request.get_ref());
 
@@ -53,7 +60,7 @@ impl Worker for WorkerService {
         if parsed.is_err() {
             return Err(Status::invalid_argument("invalid UUID"));
         }
-        let result = self.my_worker.status(parsed.unwrap());
+        let result = self.job_manager.status(parsed.unwrap());
         match result {
             Ok(s) => Ok(Response::new(s)),
             Err(e) => Result::Err(Status::new(tonic::Code::Internal, e)),
@@ -62,6 +69,7 @@ impl Worker for WorkerService {
 
     type GetLogsStream = Pin<Box<dyn Stream<Item = Result<api::Log, Status>> + Send + Sync + 'static>>;
 
+    /// Stream the logs from the job identified by the given UUID
     async fn get_logs(&self, request: tonic::Request<JobId>) -> Result<tonic::Response<Self::GetLogsStream>, tonic::Status> {
         log::info!("get_logs {:?}", request.get_ref());
         Result::Err(Status::unimplemented("get_logs is not yet implemented"))
@@ -76,34 +84,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // for some reason 127.0.0.1 didn't work here
     let addr = "0.0.0.0:50051".parse()?;
-    let worker = WorkerService { my_worker: MyWorker::new() };
+    let worker = WorkerService {
+        job_manager: JobManager::new(),
+    };
 
     Server::builder().add_service(WorkerServer::new(worker)).serve(addr).await?;
 
     Ok(())
 }
 
+/// Job represents a command that has been requested to run by a client.
 #[derive(Debug)]
 struct Job {
+    /// id uniquely identifies the job
     id: Uuid,
+
+    /// status contains the current status of the job
     status: StatusResponse,
-    /// command is the command that was requested. It's a String because the Job owns the content.
+
+    /// command is the command that was requested. It's a String (rather than a &str) because the Job owns the content.
     command: String,
 }
 
-//TODO: rename this to something better. Or maybe rename the other Worker.
+/// JobManager manages the submitted jobs.
 #[derive(Debug)]
-struct MyWorker {
+struct JobManager {
     jobs: Mutex<HashMap<Uuid, Job>>,
 }
 
-impl MyWorker {
-    fn new() -> MyWorker {
-        MyWorker {
+impl JobManager {
+    /// Return a new JobManager with an empty jobs map.
+    fn new() -> JobManager {
+        JobManager {
             jobs: Mutex::new(HashMap::new()),
         }
     }
 
+    /// Submit the given command to be executed
     fn submit(&self, command: String) -> Result<Uuid, &str> {
         let id = Uuid::new_v4();
         let mut guard = self.jobs.lock().unwrap();
@@ -123,6 +140,7 @@ impl MyWorker {
         Ok(id)
     }
 
+    /// Return the status of the job identified by the given UUID
     fn status(&self, uuid: Uuid) -> Result<StatusResponse, &str> {
         let guard = self.jobs.lock().unwrap();
 
@@ -133,6 +151,7 @@ impl MyWorker {
         }
     }
 
+    /// Kill the job identified by the given UUID
     fn kill(&self, uuid: Uuid) -> Result<(), &str> {
         let mut guard = self.jobs.lock().unwrap();
 
