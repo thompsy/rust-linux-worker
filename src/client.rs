@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         SubCommand::Status(s) => {
             log::info!("Getting status for job_id {}", &s.job_id);
 
-            let request = tonic::Request::new(api::JobId{ id: s.job_id.to_owned()});
+            let request = tonic::Request::new(api::JobId { id: s.job_id.to_owned() });
             let response = client.status(request).await?;
 
             log::info!("response {:?}", response)
@@ -83,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         SubCommand::Kill(s) => {
             log::info!("Killing job_id {}", &s.job_id);
 
-            let request = tonic::Request::new(api::JobId{ id: s.job_id.to_owned()});
+            let request = tonic::Request::new(api::JobId { id: s.job_id.to_owned() });
             let response = client.stop(request).await?;
 
             log::info!("response {:?}", response)
