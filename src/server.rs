@@ -2,13 +2,44 @@ use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Mutex;
 
+
 use api::worker_server::{Worker, WorkerServer};
 use api::{JobId, StatusResponse, StatusType};
+use clap::{AppSettings, Clap};
 use futures::Stream;
 use log::LevelFilter;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
+
+mod reexec;
+
+/// rust-linux-worker-server runs arbitrary Linux commands in a containerised environment.
+#[derive(Clap)]
+#[clap(version = "1.0", author = "Andrew Thompson <code@downthewire.co.uk>")]
+#[clap(setting = AppSettings::ColoredHelp)]
+struct Opts {
+    #[clap(subcommand)]
+    subcmd: SubCommand,
+}
+
+#[derive(Clap)]
+enum SubCommand {
+    Exec(Exec),
+    Serve(Serve),
+}
+
+/// Execute the given command in a containerised environment
+#[derive(Clap)]
+struct Exec {
+    /// Command to execute
+    command: String,
+}
+
+/// Server requests
+#[derive(Clap)]
+struct Serve {
+}
 
 /// api is the namespace for the GRPC generated code.
 pub mod api {
@@ -80,15 +111,26 @@ impl Worker for WorkerService {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::builder().filter_level(LevelFilter::Info).init();
 
-    log::info!("Starting...");
+    let opts: Opts = Opts::parse();
 
-    // for some reason 127.0.0.1 didn't work here
-    let addr = "0.0.0.0:50051".parse()?;
-    let worker = WorkerService {
-        job_manager: JobManager::new(),
-    };
+    match opts.subcmd {
+        SubCommand::Exec(e) => {
+            log::info!("re-exec {:?}", e.command);
 
-    Server::builder().add_service(WorkerServer::new(worker)).serve(addr).await?;
+            reexec::reexec(e.command);
+        }
+        SubCommand::Serve(_) => {
+            log::info!("Serving...");
+
+            // for some reason 127.0.0.1 didn't work here
+            let addr = "0.0.0.0:50051".parse()?;
+            let worker = WorkerService {
+                job_manager: JobManager::new(),
+            };
+        
+            Server::builder().add_service(WorkerServer::new(worker)).serve(addr).await?;        
+        }
+    }
 
     Ok(())
 }
@@ -134,6 +176,8 @@ impl JobManager {
             command,
         };
         log::info!("Created job {:?}", &job);
+
+        //TODO: run child process here and capture output. Don't worry about streaming the logs yet
 
         guard.insert(id, job);
 
