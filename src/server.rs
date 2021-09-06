@@ -1,11 +1,13 @@
 use std::collections::HashMap;
+use std::io::Write;
 use std::pin::Pin;
+use std::process::id;
 use std::sync::Mutex;
-
 
 use api::worker_server::{Worker, WorkerServer};
 use api::{JobId, StatusResponse, StatusType};
 use clap::{AppSettings, Clap};
+use env_logger::TimestampPrecision;
 use futures::Stream;
 use log::LevelFilter;
 use tonic::transport::Server;
@@ -25,21 +27,20 @@ struct Opts {
 
 #[derive(Clap)]
 enum SubCommand {
-    Exec(Exec),
+    ExecTest(ExecTest),
     Serve(Serve),
 }
 
-/// Execute the given command in a containerised environment
+/// Test the execution of the given command in a containerised environment
 #[derive(Clap)]
-struct Exec {
+struct ExecTest {
     /// Command to execute
     command: String,
 }
 
 /// Server requests
 #[derive(Clap)]
-struct Serve {
-}
+struct Serve {}
 
 /// api is the namespace for the GRPC generated code.
 pub mod api {
@@ -109,15 +110,33 @@ impl Worker for WorkerService {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::builder().filter_level(LevelFilter::Info).init();
+    env_logger::builder()
+        .filter_level(LevelFilter::Info)
+        .format_timestamp(Some(env_logger::TimestampPrecision::Millis))
+        // This custom formatter allows us to include the PID in the logs for easier debugging.
+        .format(|buf, record| {
+            let ts = buf.timestamp();
+            let p = std::process::id();
+            writeln!(
+                buf,
+                "[{} {} {} {}] {}",
+                ts,
+                record.level(),
+                p,
+                record.module_path().unwrap(),
+                record.args()
+            )
+        })
+        .init();
 
     let opts: Opts = Opts::parse();
 
     match opts.subcmd {
-        SubCommand::Exec(e) => {
-            log::info!("re-exec {:?}", e.command);
+        SubCommand::ExecTest(e) => {
+            log::info!("re-exec test {:?}", e.command);
 
-            reexec::reexec(e.command);
+            //TODO here we want to create the child process, containerise it and run the command
+            reexec::fork_child(e.command);
         }
         SubCommand::Serve(_) => {
             log::info!("Serving...");
@@ -127,8 +146,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let worker = WorkerService {
                 job_manager: JobManager::new(),
             };
-        
-            Server::builder().add_service(WorkerServer::new(worker)).serve(addr).await?;        
+
+            Server::builder().add_service(WorkerServer::new(worker)).serve(addr).await?;
         }
     }
 
