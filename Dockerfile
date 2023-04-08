@@ -5,6 +5,7 @@ RUN rustup target add x86_64-unknown-linux-musl
 RUN rustup component add rustfmt
 WORKDIR /usr/src/rust-linux-worker
 COPY Cargo.toml Cargo.toml
+RUN cargo add clap --features derive
 RUN mkdir src/
 RUN echo "fn main() {println!(\"if you see this, the build broke\")}" > src/main.rs
 
