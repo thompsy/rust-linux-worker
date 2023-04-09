@@ -1,13 +1,15 @@
+use std::io::prelude::*;
 use std::collections::HashMap;
 use std::io::Write;
 use std::pin::Pin;
-use std::process::id;
+//use std::process::id;
 use std::sync::Mutex;
+use unshare::{PipeReader};
 
 use api::worker_server::{Worker, WorkerServer};
 use api::{JobId, StatusResponse, StatusType};
 use clap::{AppSettings, Clap};
-use env_logger::TimestampPrecision;
+//use env_logger::TimestampPrecision;
 use futures::Stream;
 use log::LevelFilter;
 use tonic::transport::Server;
@@ -136,7 +138,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             log::info!("re-exec test {:?}", e.command);
 
             //TODO here we want to create the child process, containerise it and run the command
-            reexec::fork_child(e.command);
+            let command = reexec::get_child(e.command);
+            let mut child = command.unwrap();
+
+            let status = child.wait();
+            if status.is_err() {
+                log::info!("error waiting for child process: {}", status.as_ref().unwrap_err());
+            }
+
+            let pipe: &mut PipeReader = child.stdout.as_mut().unwrap();
+            let mut buffer = String::new();
+            let _output = pipe.read_to_string(&mut buffer);
+
+            log::info!("output: {}", buffer);
+            log::info!("child exited with status {}", status.unwrap());
         }
         SubCommand::Serve(_) => {
             log::info!("Serving...");
