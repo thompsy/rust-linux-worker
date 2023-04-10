@@ -1,15 +1,9 @@
 use std::io::prelude::*;
-use std::collections::HashMap;
-use std::io::Write;
 use std::pin::Pin;
-//use std::process::id;
-use std::sync::Mutex;
-use unshare::{PipeReader};
-
+use unshare::PipeReader;
 use api::worker_server::{Worker, WorkerServer};
-use api::{JobId, StatusResponse, StatusType};
+use api::{JobId, StatusResponse};
 use clap::{AppSettings, Clap};
-//use env_logger::TimestampPrecision;
 use futures::Stream;
 use log::LevelFilter;
 use tonic::transport::Server;
@@ -17,6 +11,7 @@ use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
 mod reexec;
+mod job_manager;
 
 /// rust-linux-worker-server runs arbitrary Linux commands in a containerised environment.
 #[derive(Clap)]
@@ -53,7 +48,7 @@ pub mod api {
 #[derive(Debug)]
 pub struct WorkerService {
     /// JobManager manages the actual jobs submitted by the client.
-    job_manager: JobManager,
+    job_manager: job_manager::JobManager,
 }
 
 #[tonic::async_trait]
@@ -159,7 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // for some reason 127.0.0.1 didn't work here
             let addr = "0.0.0.0:50051".parse()?;
             let worker = WorkerService {
-                job_manager: JobManager::new(),
+                job_manager: job_manager::JobManager::new(),
             };
 
             Server::builder().add_service(WorkerServer::new(worker)).serve(addr).await?;
@@ -169,80 +164,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Job represents a command that has been requested to run by a client.
-#[derive(Debug)]
-struct Job {
-    /// id uniquely identifies the job
-    id: Uuid,
-
-    /// status contains the current status of the job
-    status: StatusResponse,
-
-    /// command is the command that was requested. It's a String (rather than a &str) because the Job owns the content.
-    command: String,
-}
-
-/// JobManager manages the submitted jobs.
-#[derive(Debug)]
-struct JobManager {
-    jobs: Mutex<HashMap<Uuid, Job>>,
-}
-
-impl JobManager {
-    /// Return a new JobManager with an empty jobs map.
-    fn new() -> JobManager {
-        JobManager {
-            jobs: Mutex::new(HashMap::new()),
-        }
-    }
-
-    /// Submit the given command to be executed
-    fn submit(&self, command: String) -> Result<Uuid, &str> {
-        let id = Uuid::new_v4();
-        let mut guard = self.jobs.lock().unwrap();
-
-        let job = Job {
-            id,
-            status: StatusResponse {
-                status: StatusType::Running as i32,
-                exit_code: 0,
-            },
-            command,
-        };
-        log::info!("Created job {:?}", &job);
-
-        //TODO: run child process here and capture output. Don't worry about streaming the logs yet
-
-        guard.insert(id, job);
-
-        Ok(id)
-    }
-
-    /// Return the status of the job identified by the given UUID
-    fn status(&self, uuid: Uuid) -> Result<StatusResponse, &str> {
-        let guard = self.jobs.lock().unwrap();
-
-        let command = guard.get(&uuid);
-        match command {
-            Some(job) => Ok(job.status.clone()),
-            None => Err("Job not found"),
-        }
-    }
-
-    /// Kill the job identified by the given UUID
-    fn kill(&self, uuid: Uuid) -> Result<(), &str> {
-        let mut guard = self.jobs.lock().unwrap();
-
-        let command = guard.get_mut(&uuid);
-        match command {
-            Some(mut job) => {
-                job.status = api::StatusResponse {
-                    status: StatusType::Stopped as i32,
-                    exit_code: 0,
-                };
-                Ok(())
-            }
-            None => Err("Job not found"),
-        }
-    }
-}
