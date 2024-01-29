@@ -14,6 +14,8 @@ struct Job {
 
     /// command is the command that was requested. It's a String (rather than a &str) because the Job owns the content.
     command: String,
+
+    child: unshare::Child,
 }
 
 /// JobManager manages the submitted jobs.
@@ -35,21 +37,30 @@ impl JobManager {
         let id = Uuid::new_v4();
         let mut guard = self.jobs.lock().unwrap();
 
-        let job = Job {
-            id,
-            status: StatusResponse {
-                status: StatusType::Running as i32,
-                exit_code: 0,
-            },
-            command,
-        };
-        log::info!("Created job {:?}", &job);
-
         //TODO: run child process here and capture output. Don't worry about streaming the logs yet
-        
-        guard.insert(id, job);
+        match crate::reexec::get_child(command.clone()) {
+            Err(e) =>
+            {
+                log::error!("error: {}", e);
+                Err("failed to run child")
+            },
+            Ok(child) => {
+                let job = Job {
+                    id,
+                    //TODO: status should come from the child.
+                    status: StatusResponse {
+                        status: StatusType::Running as i32,
+                        exit_code: 0,
+                    },
+                    command,
+                    child,
+                };
+                log::info!("Created job {:?}", &job);
 
-        Ok(id)
+                guard.insert(id, job);
+                Ok(id)
+            }            
+        }
     }
 
     /// Return the status of the job identified by the given UUID
@@ -58,7 +69,47 @@ impl JobManager {
 
         let command = guard.get(&uuid);
         match command {
-            Some(job) => Ok(job.status.clone()),
+            //TODO: status should come from the child. It's actually not clear how I can get that information here.
+            Some(job) => {
+                //TODO tidy this up
+                let pid: i32 = job.child.pid();
+                let x = nix::unistd::Pid::from_raw(pid);
+                //TODO WNOWAIT gave me EINVAL for some reason.
+                //let result = nix::sys::wait::waitpid(x, Some(nix::sys::wait::WaitPidFlag::WNOWAIT));
+                let result = nix::sys::wait::waitpid(x, Some(nix::sys::wait::WaitPidFlag::WNOHANG));
+
+                //TODO this nested match is not great. What's a better approach?
+                match result {
+                    Err(e) => {
+                        log::error!("error getting status: {}", e);
+                        Err("error getting status")
+                    },
+                    Ok(status) => {
+                        match status {
+
+                            //TODO lots to tidy up here, but the basic idea works
+                            // test this with a longer running command
+                            nix::sys::wait::WaitStatus::StillAlive => {
+                                log::info!("status: still alive");
+                                return Ok(crate::api::StatusResponse {
+                                    status: StatusType::Running as i32,
+                                    exit_code: 0,
+                                })
+                            },
+                            // this does seem to be working.
+                            nix::sys::wait::WaitStatus::Exited(p, status) => {
+                                log::info!("status of {}: {}", p, status);
+                            },
+                            e => {
+                                log::info!("other status");
+                            },
+                        }
+                        //log::info!("status: {}", status);
+                        Ok(job.status.clone())
+                            
+                    },
+                }
+            },
             None => Err("Job not found"),
         }
     }
@@ -71,10 +122,18 @@ impl JobManager {
         match command {
             Some(mut job) => {
                 job.status = crate::api::StatusResponse {
+                    //TODO status should come from the child
                     status: StatusType::Stopped as i32,
                     exit_code: 0,
                 };
-                Ok(())
+                let result = job.child.kill();
+                match result {
+                    Err(e) => {
+                        log::error!("error killing job: {}", e);
+                        Err("Failed to kill job")
+                    },
+                    Ok(_) => Ok(())
+                }
             }
             None => Err("Job not found"),
         }
