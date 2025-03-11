@@ -1,17 +1,17 @@
-use std::io::prelude::*;
-use std::pin::Pin;
-use unshare::PipeReader;
 use api::worker_server::{Worker, WorkerServer};
 use api::{JobId, StatusResponse};
 use clap::{AppSettings, Clap};
 use futures::Stream;
 use log::LevelFilter;
+use std::io::prelude::*;
+use std::pin::Pin;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
+use unshare::PipeReader;
 use uuid::Uuid;
 
-mod reexec;
 mod job_manager;
+mod reexec;
 
 /// rust-linux-worker-server runs arbitrary Linux commands in a containerised environment.
 #[derive(Clap)]
@@ -163,4 +163,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

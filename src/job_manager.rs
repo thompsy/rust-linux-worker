@@ -1,7 +1,7 @@
+use crate::api::{StatusResponse, StatusType};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use uuid::Uuid;
-use crate::api::{StatusResponse, StatusType};
 
 /// Job represents a command that has been requested to run by a client.
 #[derive(Debug)]
@@ -46,7 +46,7 @@ impl JobManager {
         log::info!("Created job {:?}", &job);
 
         //TODO: run child process here and capture output. Don't worry about streaming the logs yet
-        
+
         guard.insert(id, job);
 
         Ok(id)
