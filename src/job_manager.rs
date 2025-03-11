@@ -47,6 +47,8 @@ impl JobManager {
 
         //TODO: run child process here and capture output. Don't worry about streaming the logs yet
 
+        // TODO: consider adding the actual job to the struct
+
         guard.insert(id, job);
 
         Ok(id)
@@ -58,8 +60,15 @@ impl JobManager {
 
         let command = guard.get(&uuid);
         match command {
-            Some(job) => Ok(job.status.clone()),
-            None => Err("Job not found"),
+            Some(job) => {
+                let status = job.status.clone();
+                log::info!("found job {:?} with status: {:?}", uuid, status);
+                Ok(status)
+            },
+
+            None => {
+                log::info!("job not found {:?}", uuid);
+                Err("Job not found")},
         }
     }
 
@@ -70,13 +79,18 @@ impl JobManager {
         let command = guard.get_mut(&uuid);
         match command {
             Some(mut job) => {
+                log::info!("found job {:?}", uuid);
+                // TODO we actually need to kill the process here!
                 job.status = crate::api::StatusResponse {
                     status: StatusType::Stopped as i32,
                     exit_code: 0,
                 };
                 Ok(())
             }
-            None => Err("Job not found"),
+            None => {
+                log::info!("job not found {:?}", uuid);
+                Err("Job not found")
+            },
         }
     }
 }
