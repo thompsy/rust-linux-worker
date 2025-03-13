@@ -3,6 +3,8 @@ use crate::reexec;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use uuid::Uuid;
+use unshare::Command;
+use std::sync::Arc;
 
 /// Job represents a command that has been requested to run by a client.
 #[derive(Debug)]
@@ -15,6 +17,8 @@ struct Job {
 
     /// command is the command that was requested. It's a String (rather than a &str) because the Job owns the content.
     command: String,
+
+    //cmd: Arc<Command>,
 }
 
 /// JobManager manages the submitted jobs.
@@ -34,8 +38,9 @@ impl JobManager {
     /// Submit the given command to be executed
     pub fn submit(&self, command: String) -> Result<Uuid, &str> {
         let id = Uuid::new_v4();
-        let mut guard = self.jobs.lock().unwrap();
-        let _child = reexec::get_child(&command);
+
+        let c = reexec::get_child(&command);
+        let cmd = Arc::new(c);
 
         let job = Job {
             id,
@@ -44,13 +49,14 @@ impl JobManager {
                 exit_code: 0,
             },
             command,
+            //cmd,
         };
         log::info!("Created job {:?}", &job);
 
         //TODO: run child process here and capture output. Don't worry about streaming the logs yet
 
         // TODO: consider adding the actual job to the struct
-
+        let mut guard = self.jobs.lock().unwrap();
         guard.insert(id, job);
 
         Ok(id)

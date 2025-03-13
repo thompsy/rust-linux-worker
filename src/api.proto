@@ -6,7 +6,8 @@ service Worker {
   rpc Submit (Command) returns (JobId) {}
   rpc Stop (JobId) returns (Empty) {}
   rpc Status (JobId) returns (StatusResponse) {}
-  rpc GetLogs (JobId) returns (stream Log) {}
+  // TODO commenting until I implement this
+  //rpc GetLogs (JobId) returns (stream Log) {}
 }
 
 message Command {

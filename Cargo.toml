@@ -1,17 +1,17 @@
 [package]
 name = "rust-linux-worker"
-version = "0.1.0"
-edition = "2018"
+version = "1.85.0"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "3.0.0-beta.4", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 uuid = { version = "0.4", features = ["v4"]}
 log = "0.4"
 env_logger = "0.9.0"
-tonic = "0.5"
-prost = "0.8"
+tonic = "0.12"
+prost = "0.13"
 tokio = { version = "1.0", features = ["full"] }
 futures = "0.3.17"
 nix = "0.22.1"
@@ -20,7 +20,7 @@ hostname = {version = "0.3.0", features = ["set"] }
 
 
 [build-dependencies]
-tonic-build = "0.5"
+tonic-build = "0.12"
 
 [[bin]]
 name = "client"

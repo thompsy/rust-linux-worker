@@ -1,43 +1,34 @@
 use api::worker_server::{Worker, WorkerServer};
 use api::{JobId, StatusResponse};
-use clap::{AppSettings, Clap};
-use futures::Stream;
+use clap::{Parser,Subcommand};
 use log::LevelFilter;
 use std::io::prelude::*;
-use std::pin::Pin;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 use unshare::PipeReader;
 use uuid::Uuid;
+use std::sync::Arc;
 
 mod job_manager;
 mod reexec;
 
 /// rust-linux-worker-server runs arbitrary Linux commands in a containerised environment.
-#[derive(Clap)]
-#[clap(version = "1.0", author = "Andrew Thompson <code@downthewire.co.uk>")]
-#[clap(setting = AppSettings::ColoredHelp)]
-struct Opts {
-    #[clap(subcommand)]
-    subcmd: SubCommand,
+#[derive(Parser)]
+#[command(name = "server")]
+#[command(about = "A basic command runner")]
+struct Args {
+    #[command(subcommand)]
+    cmd: Commands
 }
 
-#[derive(Clap)]
-enum SubCommand {
-    ExecTest(ExecTest),
-    Serve(Serve),
+#[derive(Subcommand, Debug, Clone)]
+enum Commands {
+    ExecTest {
+        command: String,
+    },
+    Serve,
 }
 
-/// Test the execution of the given command in a containerised environment
-#[derive(Clap)]
-struct ExecTest {
-    /// Command to execute
-    command: String,
-}
-
-/// Server requests
-#[derive(Clap)]
-struct Serve {}
 
 /// api is the namespace for the GRPC generated code.
 pub mod api {
@@ -48,7 +39,7 @@ pub mod api {
 #[derive(Debug)]
 pub struct WorkerService {
     /// JobManager manages the actual jobs submitted by the client.
-    job_manager: job_manager::JobManager,
+    job_manager: Arc<job_manager::JobManager>,
 }
 
 #[tonic::async_trait]
@@ -96,13 +87,13 @@ impl Worker for WorkerService {
         }
     }
 
-    type GetLogsStream = Pin<Box<dyn Stream<Item = Result<api::Log, Status>> + Send + Sync + 'static>>;
+    // type GetLogsStream = Pin<Box<dyn Stream<Item = Result<api::Log, Status>> + Send + Sync + 'static>>;
 
-    /// Stream the logs from the job identified by the given UUID
-    async fn get_logs(&self, request: tonic::Request<JobId>) -> Result<tonic::Response<Self::GetLogsStream>, tonic::Status> {
-        log::info!("get_logs {:?}", request.get_ref());
-        Result::Err(Status::unimplemented("get_logs is not yet implemented"))
-    }
+    // /// Stream the logs from the job identified by the given UUID
+    // async fn get_logs(&self, request: tonic::Request<JobId>) -> Result<tonic::Response<Self::GetLogsStream>, tonic::Status> {
+    //     log::info!("get_logs {:?}", request.get_ref());
+    //     Result::Err(Status::unimplemented("get_logs is not yet implemented"))
+    // }
 }
 
 #[tokio::main]
@@ -126,14 +117,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .init();
 
-    let opts: Opts = Opts::parse();
+    let args = Args::parse();
 
-    match opts.subcmd {
-        SubCommand::ExecTest(e) => {
-            log::info!("re-exec test {:?}", e.command);
+    match args.cmd {
+        Commands::ExecTest { command: cmd } => {
+            log::info!("re-exec test {:?}", cmd);
 
             //TODO here we want to create the child process, containerise it and run the command
-            let mut command = reexec::get_child(&e.command);
+            let mut command = reexec::get_child(&cmd);
 
             let mut child = command.spawn().unwrap();
 
@@ -149,13 +140,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             log::info!("output: {}", buffer);
             log::info!("child exited with status {}", status.unwrap());
         }
-        SubCommand::Serve(_) => {
+        Commands::Serve => {
             log::info!("Serving...");
 
             // for some reason 127.0.0.1 didn't work here
             let addr = "0.0.0.0:50051".parse()?;
             let worker = WorkerService {
-                job_manager: job_manager::JobManager::new(),
+                job_manager: Arc::new(job_manager::JobManager::new()),
             };
 
             Server::builder().add_service(WorkerServer::new(worker)).serve(addr).await?;
