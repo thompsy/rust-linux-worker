@@ -1,4 +1,5 @@
 use crate::api::{StatusResponse, StatusType};
+use crate::reexec;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use uuid::Uuid;
@@ -34,6 +35,7 @@ impl JobManager {
     pub fn submit(&self, command: String) -> Result<Uuid, &str> {
         let id = Uuid::new_v4();
         let mut guard = self.jobs.lock().unwrap();
+        let _child = reexec::get_child(&command);
 
         let job = Job {
             id,
@@ -64,11 +66,12 @@ impl JobManager {
                 let status = job.status.clone();
                 log::info!("found job {:?} with status: {:?}", uuid, status);
                 Ok(status)
-            },
+            }
 
             None => {
                 log::info!("job not found {:?}", uuid);
-                Err("Job not found")},
+                Err("Job not found")
+            }
         }
     }
 
@@ -78,7 +81,7 @@ impl JobManager {
 
         let command = guard.get_mut(&uuid);
         match command {
-            Some(mut job) => {
+            Some(job) => {
                 log::info!("found job {:?}", uuid);
                 // TODO we actually need to kill the process here!
                 job.status = crate::api::StatusResponse {
@@ -90,7 +93,7 @@ impl JobManager {
             None => {
                 log::info!("job not found {:?}", uuid);
                 Err("Job not found")
-            },
+            }
         }
     }
 }

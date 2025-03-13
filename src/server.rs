@@ -133,8 +133,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             log::info!("re-exec test {:?}", e.command);
 
             //TODO here we want to create the child process, containerise it and run the command
-            let command = reexec::get_child(e.command);
-            let mut child = command.unwrap();
+            let mut command = reexec::get_child(&e.command);
+
+            let mut child = command.spawn().unwrap();
 
             let status = child.wait();
             if status.is_err() {
